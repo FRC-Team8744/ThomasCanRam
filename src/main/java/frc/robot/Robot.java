@@ -13,15 +13,17 @@ import edu.wpi.first.math.trajectory.Trajectory;
 import edu.wpi.first.math.trajectory.TrajectoryConfig;
 import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.math.util.Units;
+// import edu.wpi.first.wpilibj.DataLogManager;
+// import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import java.util.List;
 
 public class Robot extends TimedRobot {
-  private final XboxController m_controller = new XboxController(0);
+  private final Joystick m_controller = new Joystick(0);
   private final Drivetrain m_drive = new Drivetrain();
 
   // Slew rate limiters to make joystick inputs more gentle; 1/3 sec from 0 to 1.
@@ -42,6 +44,12 @@ public class Robot extends TimedRobot {
 
   @Override
   public void robotInit() {
+    // Starts recording to data log
+    // DataLogManager.start();
+
+    // Record both DS control and joystick data
+    // DriverStation.startDataLog(DataLogManager.getLog());
+
     // Create the trajectory to follow in autonomous. It is best to initialize
     // trajectories here to avoid wasting time in autonomous.
     m_trajectory =
@@ -95,14 +103,24 @@ public class Robot extends TimedRobot {
   public void teleopPeriodic() {
     // Get the x speed. We are inverting this because Xbox controllers return
     // negative values when we push forward.
-    final var xSpeed = -m_speedLimiter.calculate(m_controller.getLeftY()) * Drivetrain.kMaxSpeed;
+    final var xSpeed = -m_speedLimiter.calculate(m_controller.getY()) * Drivetrain.kMaxSpeed;
 
     // Get the rate of angular rotation. We are inverting this because we want a
     // positive value when we pull to the left (remember, CCW is positive in
     // mathematics). Xbox controllers return positive values when you pull to
     // the right by default.
-    final var rot = -m_rotLimiter.calculate(m_controller.getRightX()) * Drivetrain.kMaxAngularSpeed;
+    final var rot = -m_rotLimiter.calculate(m_controller.getX()) * Drivetrain.kMaxAngularSpeed;
 
     m_drive.drive(xSpeed, rot);
+
+    SmartDashboard.putNumber("m_leftEncoder", m_drive.getLeftEncoderPosition());
+    SmartDashboard.putNumber("m_rightEncoder", m_drive.getRightEncoderPosition());
+    SmartDashboard.putNumber("Left Velocity", m_drive.getLeftEncoderVelocity());
+    SmartDashboard.putNumber("Right Velocity", m_drive.getRightEncoderVelocity());
+
+    SmartDashboard.putNumber("Pose Rotation", m_drive.m_odometry.getPoseMeters().getRotation().getDegrees());
+    SmartDashboard.putNumber("Pose X", m_drive.m_odometry.getPoseMeters().getTranslation().getX());
+    SmartDashboard.putNumber("Pose Y", m_drive.m_odometry.getPoseMeters().getTranslation().getY());
+
   }
 }

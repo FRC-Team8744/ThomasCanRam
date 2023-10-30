@@ -4,6 +4,11 @@
 
 package frc.robot;
 
+import com.kauailabs.navx.frc.AHRS;
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.RelativeEncoder;
+import com.revrobotics.CANSparkMaxLowLevel.MotorType;
+
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -11,35 +16,46 @@ import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.DifferentialDriveKinematics;
 import edu.wpi.first.math.kinematics.DifferentialDriveOdometry;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
-import edu.wpi.first.wpilibj.AnalogGyro;
-import edu.wpi.first.wpilibj.Encoder;
-import edu.wpi.first.wpilibj.motorcontrol.MotorController;
+import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
-import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
 
 /** Represents a differential drive style drivetrain. */
 public class Drivetrain {
   public static final double kMaxSpeed = 3.0; // meters per second
   public static final double kMaxAngularSpeed = 2 * Math.PI; // one rotation per second
 
-  private static final double kTrackWidth = 0.381 * 2; // meters
-  private static final double kWheelRadius = 0.0508; // meters
-  private static final int kEncoderResolution = 4096;
+  public static final double kConvertInchToMeter = 0.0254;
 
-  private final MotorController m_leftLeader = new PWMSparkMax(1);
-  private final MotorController m_leftFollower = new PWMSparkMax(2);
-  private final MotorController m_rightLeader = new PWMSparkMax(3);
-  private final MotorController m_rightFollower = new PWMSparkMax(4);
+  public static final double kGearRatio = 8.45;
 
-  private final Encoder m_leftEncoder = new Encoder(0, 1);
-  private final Encoder m_rightEncoder = new Encoder(2, 3);
+  private static final double kTrackWidthInch = 18.5;
+  private static final double kTrackWidth = kTrackWidthInch * kConvertInchToMeter; // meters
+
+  public static final double kWheelDiameterInches = 6.0;
+  public static final double kWheelDiameterMeters = kWheelDiameterInches * kConvertInchToMeter;
+
+  public static final double kEncoderDistancePerRevolution = (kWheelDiameterMeters * Math.PI) / kGearRatio;
+
+  // SysID file used: C:\Users\FabLab9\FRC2024\ThomasCanTrack\sysid_data\sysid_data20231029-134230.json
+  public static final double ksVolts = 0.11161; // Don't change!
+  public static final double kvVoltSecondsPerMeter = 2.2496; // Don't change!
+  public static final double kaVoltSecondsSquaredPerMeter = 0.346; // Don't change!
+  
+  private final CANSparkMax m_leftFront = new CANSparkMax(9, MotorType.kBrushless);
+  private final CANSparkMax m_leftRear = new CANSparkMax(10, MotorType.kBrushless);
+  private final CANSparkMax m_rightFront = new CANSparkMax(7, MotorType.kBrushless);
+  private final CANSparkMax m_rightRear = new CANSparkMax(8, MotorType.kBrushless);
+
+  private final RelativeEncoder m_leftEncoder = m_leftFront.getEncoder();
+  private final RelativeEncoder m_rightEncoder = m_rightFront.getEncoder();
+
+  // The gyro sensor
+  private final AHRS m_gyro = new AHRS(SerialPort.Port.kUSB);
 
   private final MotorControllerGroup m_leftGroup =
-      new MotorControllerGroup(m_leftLeader, m_leftFollower);
+      new MotorControllerGroup(m_leftFront, m_leftRear);
   private final MotorControllerGroup m_rightGroup =
-      new MotorControllerGroup(m_rightLeader, m_rightFollower);
-
-  private final AnalogGyro m_gyro = new AnalogGyro(0);
+      new MotorControllerGroup(m_rightFront, m_rightRear);
 
   private final PIDController m_leftPIDController = new PIDController(1, 0, 0);
   private final PIDController m_rightPIDController = new PIDController(1, 0, 0);
@@ -47,10 +63,10 @@ public class Drivetrain {
   private final DifferentialDriveKinematics m_kinematics =
       new DifferentialDriveKinematics(kTrackWidth);
 
-  private final DifferentialDriveOdometry m_odometry;
+  final DifferentialDriveOdometry m_odometry;
 
-  // Gains are for example purposes only - must be determined for your own robot!
-  private final SimpleMotorFeedforward m_feedforward = new SimpleMotorFeedforward(1, 3);
+  // Gains are from a SysId check of Thomas - Don't change!
+  private final SimpleMotorFeedforward m_feedforward = new SimpleMotorFeedforward(ksVolts, kvVoltSecondsPerMeter);
 
   /**
    * Constructs a differential drive object. Sets the encoder distance per pulse and resets the
@@ -67,18 +83,45 @@ public class Drivetrain {
     // Set the distance per pulse for the drive encoders. We can simply use the
     // distance traveled for one rotation of the wheel divided by the encoder
     // resolution.
-    m_leftEncoder.setDistancePerPulse(2 * Math.PI * kWheelRadius / kEncoderResolution);
-    m_rightEncoder.setDistancePerPulse(2 * Math.PI * kWheelRadius / kEncoderResolution);
+    m_leftEncoder.setPositionConversionFactor(kEncoderDistancePerRevolution);
+    m_rightEncoder.setPositionConversionFactor(kEncoderDistancePerRevolution);
 
-    m_leftEncoder.reset();
-    m_rightEncoder.reset();
+    // Reset encoders to zero
+    m_leftEncoder.setPosition(0);
+    m_rightEncoder.setPosition(0);
 
     m_odometry =
         new DifferentialDriveOdometry(
-            m_gyro.getRotation2d(), m_leftEncoder.getDistance(), m_rightEncoder.getDistance());
+            m_gyro.getRotation2d(), getLeftEncoderPosition(), getRightEncoderPosition());
+  }
+
+/**
+   * Gets the left drive encoder.
+   *
+   * @return the left drive encoder
+   */
+  public double getLeftEncoderPosition() {
+    return m_leftEncoder.getPosition();
   }
 
   /**
+   * Gets the right drive encoder.
+   *
+   * @return the right drive encoder
+   */
+  public double getRightEncoderPosition() {
+    return -m_rightEncoder.getPosition();
+  }
+
+  public double getLeftEncoderVelocity() {
+    return m_leftEncoder.getVelocity();
+  }
+
+  public double getRightEncoderVelocity() {
+    return -m_rightEncoder.getVelocity();
+  }
+
+/**
    * Sets the desired wheel speeds.
    *
    * @param speeds The desired wheel speeds.
@@ -88,9 +131,9 @@ public class Drivetrain {
     final double rightFeedforward = m_feedforward.calculate(speeds.rightMetersPerSecond);
 
     final double leftOutput =
-        m_leftPIDController.calculate(m_leftEncoder.getRate(), speeds.leftMetersPerSecond);
+        m_leftPIDController.calculate(getLeftEncoderVelocity(), speeds.leftMetersPerSecond);
     final double rightOutput =
-        m_rightPIDController.calculate(m_rightEncoder.getRate(), speeds.rightMetersPerSecond);
+        m_rightPIDController.calculate(getRightEncoderVelocity(), speeds.rightMetersPerSecond);
     m_leftGroup.setVoltage(leftOutput + leftFeedforward);
     m_rightGroup.setVoltage(rightOutput + rightFeedforward);
   }
@@ -109,7 +152,7 @@ public class Drivetrain {
   /** Updates the field-relative position. */
   public void updateOdometry() {
     m_odometry.update(
-        m_gyro.getRotation2d(), m_leftEncoder.getDistance(), m_rightEncoder.getDistance());
+        m_gyro.getRotation2d(), getLeftEncoderPosition(), getRightEncoderPosition());
   }
 
   /**
@@ -119,7 +162,7 @@ public class Drivetrain {
    */
   public void resetOdometry(Pose2d pose) {
     m_odometry.resetPosition(
-        m_gyro.getRotation2d(), m_leftEncoder.getDistance(), m_rightEncoder.getDistance(), pose);
+        m_gyro.getRotation2d(), getLeftEncoderPosition(), getRightEncoderPosition(), pose);
   }
 
   /**
