@@ -29,6 +29,8 @@ public class Robot extends TimedRobot {
   // Slew rate limiters to make joystick inputs more gentle; 1/3 sec from 0 to 1.
   private final SlewRateLimiter m_speedLimiter = new SlewRateLimiter(3);
   private final SlewRateLimiter m_rotLimiter = new SlewRateLimiter(3);
+  private double m_speedLimited;
+  private double m_rotLimited;
 
   // An example trajectory to follow during the autonomous period.
   private Trajectory m_trajectory;
@@ -103,15 +105,17 @@ public class Robot extends TimedRobot {
   public void teleopPeriodic() {
     // Get the x speed. We are inverting this because Xbox controllers return
     // negative values when we push forward.
-    final var xSpeed = -m_speedLimiter.calculate(m_controller.getY()) * Drivetrain.kMaxSpeed;
+    m_speedLimited = -m_speedLimiter.calculate(m_controller.getY());
+    final var xSpeed = m_speedLimited * Drivetrain.kMaxSpeed;
 
     // Get the rate of angular rotation. We are inverting this because we want a
     // positive value when we pull to the left (remember, CCW is positive in
     // mathematics). Xbox controllers return positive values when you pull to
     // the right by default.
-    final var rot = -m_rotLimiter.calculate(m_controller.getX()) * Drivetrain.kMaxAngularSpeed;
+    m_rotLimited = -m_rotLimiter.calculate(m_controller.getX());
+    final var rot = m_rotLimited * Drivetrain.kMaxAngularSpeed;
 
-    m_drive.drive(xSpeed, rot);
+   m_drive.drive(xSpeed, rot);
 
     SmartDashboard.putNumber("m_leftEncoder", m_drive.getLeftEncoderPosition());
     SmartDashboard.putNumber("m_rightEncoder", m_drive.getRightEncoderPosition());
@@ -122,5 +126,7 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Pose X", m_drive.m_odometry.getPoseMeters().getTranslation().getX());
     SmartDashboard.putNumber("Pose Y", m_drive.m_odometry.getPoseMeters().getTranslation().getY());
 
+    SmartDashboard.putNumber("Slow JoyX", m_rotLimited);
+    SmartDashboard.putNumber("Slow JoyY", m_speedLimited);
   }
 }

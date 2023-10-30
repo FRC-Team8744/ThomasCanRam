@@ -57,8 +57,8 @@ public class Drivetrain {
   private final MotorControllerGroup m_rightGroup =
       new MotorControllerGroup(m_rightFront, m_rightRear);
 
-  private final PIDController m_leftPIDController = new PIDController(1, 0, 0);
-  private final PIDController m_rightPIDController = new PIDController(1, 0, 0);
+  private final PIDController m_leftPIDController = new PIDController(0.001, 0, 0);
+  private final PIDController m_rightPIDController = new PIDController(0.001, 0, 0);
 
   private final DifferentialDriveKinematics m_kinematics =
       new DifferentialDriveKinematics(kTrackWidth);
@@ -145,8 +145,13 @@ public class Drivetrain {
    * @param rot Angular velocity in rad/s.
    */
   public void drive(double xSpeed, double rot) {
-    var wheelSpeeds = m_kinematics.toWheelSpeeds(new ChassisSpeeds(xSpeed, 0.0, rot));
-    setSpeeds(wheelSpeeds);
+    if ((Math.abs(xSpeed) > 0.02) || (Math.abs(rot) > 0.02)) { // Manually check deadband (because TimedRobot)
+      var wheelSpeeds = m_kinematics.toWheelSpeeds(new ChassisSpeeds(xSpeed, 0.0, rot));
+      setSpeeds(wheelSpeeds);
+      } else {
+        m_leftGroup.setVoltage(0);
+        m_rightGroup.setVoltage(0);
+      }
   }
 
   /** Updates the field-relative position. */
