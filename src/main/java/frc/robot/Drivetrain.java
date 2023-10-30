@@ -9,6 +9,7 @@ import com.revrobotics.CANSparkMax;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -145,13 +146,18 @@ public class Drivetrain {
    * @param rot Angular velocity in rad/s.
    */
   public void drive(double xSpeed, double rot) {
-    if ((Math.abs(xSpeed) > 0.02) || (Math.abs(rot) > 0.02)) { // Manually check deadband (because TimedRobot)
-      var wheelSpeeds = m_kinematics.toWheelSpeeds(new ChassisSpeeds(xSpeed, 0.0, rot));
-      setSpeeds(wheelSpeeds);
-      } else {
-        m_leftGroup.setVoltage(0);
-        m_rightGroup.setVoltage(0);
-      }
+    // if ((Math.abs(xSpeed) > 0.02) || (Math.abs(rot) > 0.02)) { // Manually check deadband (because TimedRobot)
+
+    xSpeed = MathUtil.applyDeadband(xSpeed, 0.02);  // Manually check deadband (because TimedRobot)
+    rot = MathUtil.applyDeadband(rot, 0.02);
+    
+    var wheelSpeeds = m_kinematics.toWheelSpeeds(new ChassisSpeeds(xSpeed, 0.0, rot));
+    setSpeeds(wheelSpeeds);
+
+      // } else {
+      //   m_leftGroup.setVoltage(0);
+      //   m_rightGroup.setVoltage(0);
+      // }
   }
 
   /** Updates the field-relative position. */

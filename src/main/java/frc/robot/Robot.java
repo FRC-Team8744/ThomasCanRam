@@ -103,6 +103,12 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
+    // Update odometry.
+    m_drive.updateOdometry();
+
+    // Update robot position on Field2d.
+    m_field.setRobotPose(m_drive.getPose());
+
     // Get the x speed. We are inverting this because Xbox controllers return
     // negative values when we push forward.
     m_speedLimited = -m_speedLimiter.calculate(m_controller.getY());
